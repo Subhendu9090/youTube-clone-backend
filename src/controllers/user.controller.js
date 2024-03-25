@@ -4,6 +4,7 @@ import { User } from "../models/user.model.js"
 import { uploadOnCloudinary } from "../utils/cloudenary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken"
+import mongoose from "mongoose";
 
 
 const generateAccessAndRefreshToken = async (userId) => {
@@ -13,7 +14,7 @@ const generateAccessAndRefreshToken = async (userId) => {
         const accessToken = await user.generateAccessToken()
 
         const refreshToken = await user.generateRefreshToken()
-        console.log("successfully refresh token")
+
         user.refreshToken = refreshToken;
         await user.save({ validateBeforeSave: false })
 
@@ -26,10 +27,10 @@ const generateAccessAndRefreshToken = async (userId) => {
 }
 
 const registerUser = asyncHandeler(async (req, res) => {
-    //get user details from frontend
+    // get user details from frontend
     // validation - not empty
     // check is user already exists: username,email
-    // check for images .check for avtar
+    // check for images /check for avtar
     // upload images to cloudinary
     //check for avtar
     // create user object-create entry in db
@@ -67,7 +68,7 @@ const registerUser = asyncHandeler(async (req, res) => {
     if (req.files && Array.isArray(req.files.coverImage) && req.files.coverImage.length > 0) {
         coverImageLocalPath = req.files.coverImage[0].path;
     }
-     
+
     if (!avatarLocalPath) {
         throw new ApiError(400, "Avtar file is required")
     }
@@ -154,11 +155,11 @@ const loginUser = asyncHandeler(async (req, res) => {
 })
 
 const logoutUser = asyncHandeler(async (req, res) => {
-    User.findByIdAndUpdate(
+   await User.findByIdAndUpdate(
         req.user._id,
         {
-            $set: {
-                refreshToken: undefined
+            $unset: {
+                refreshToken: 1
             },
         },
         {
@@ -281,8 +282,7 @@ const updateUserAvatar = asyncHandeler(async (req, res) => {
     if (!avatar.url) {
         throw new ApiError(400, "error while uploading on avatar ")
     }
-
-    const user = await User.findByIdAndDelete(
+    const user = await User.findByIdAndUpdate(
         req.user._id,
         {
             $set: {
@@ -323,7 +323,7 @@ const updateUserCoverImage = asyncHandeler(async (req, res) => {
         .json(new ApiResponse(200, user, "cover image updated successfully"))
 })
 
-const getUserChannel = asyncHandeler(async (req, res) => {
+const getUserChannelProfile = asyncHandeler(async (req, res) => {
     const { username } = req.params
 
     if (!username?.trim()) {
@@ -362,35 +362,86 @@ const getUserChannel = asyncHandeler(async (req, res) => {
                 },
                 isSubscribed: {
                     $cond: {
-                        if: { $in: [req.user ?._id, "$subscribers.subscriber"] },
-                        then:true,
-                        else:false
+                        if: { $in: [req.user?._id, "$subscribers.subscriber"] },
+                        then: true,
+                        else: false
                     }
                 }
             }
         },
         {
-            $project:{
-                fullName:1,
-                username:1,
-                subscribersCount:1,
-                channelsSubscribedToCount:1,
-                isSubscribed:1,
-                avatar:1,
-                coverImage:1,
-                email:1
+            $project: {
+                fullName: 1,
+                username: 1,
+                subscribersCount: 1,
+                channelsSubscribedToCount: 1,
+                isSubscribed: 1,
+                avatar: 1,
+                coverImage: 1,
+                email: 1
             }
         }
     ])
 
-    if(!channel?.length){
+    if (!channel?.length) {
         throw new ApiError(400, " chanel does not exist")
     }
 
     return res.status(200)
-    .json(
-        new ApiResponse(200, channel[0], "chanel fetched successfully")
-    )
+        .json(
+            new ApiResponse(200, channel[0], "chanel fetched successfully")
+        )
+})
+
+const getWatchHistory = asyncHandeler(async (req, res) => {
+    const user = await User.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(req.user._id)
+            }
+        },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "watchHistory",
+                foreignField: "_id",
+                as: "watchHistory",
+                pipeline: [
+                    {
+                        $lookup: {
+                            from: "users",
+                            localField: "owner",
+                            foreignField: "_id",
+                            as: "owner",
+                            pipeline: [
+                                {
+                                    $project: {
+                                        fullName: 1,
+                                        username: 1,
+                                        avatar: 1
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        $addFields: {
+                            owner: {
+                                $first: "$owner"
+                            }
+                        }
+                    }
+                ]
+            }
+        }
+    ])
+
+    return res.status(200)
+        .json(200,
+            user[0].watchHistory,
+            "watchHistory fetched successfully"
+
+        )
 })
 
 export {
@@ -403,5 +454,6 @@ export {
     updateAcountDetails,
     updateUserAvatar,
     updateUserCoverImage,
-    getUserChannel
+    getUserChannelProfile,
+    getWatchHistory
 }
