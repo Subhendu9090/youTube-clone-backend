@@ -153,9 +153,42 @@ const deletePlaylist = asyncHandeler(async(req,res)=>{
 
 })
 
+const getPlaylistById = asyncHandeler(async(req,res)=>{
+    const {playlistId} = req.params
+
+    if (!isValidObjectId(playlistId)) {
+        throw new ApiError(400,"invalid playlist Id")
+    }
+
+    const playlist = PlayList.findById(playlistId)
+
+    if (!playlist) {
+        throw new ApiError(400, "playlist not found")
+    }
+
+// aggregation pipeline
+
+
+})
+
+const getUserPlaylist = asyncHandeler(async(req,res)=>{
+    const {userId} = req.body
+
+    if (!isValidObjectId(userId)) {
+        throw new ApiError(400,"invalid user Id")
+    }
+
+    // aggregation pipeline
+
+}
+)
+
 export {
     createPlaylist,
     addVideoToPlaylist,
     removeVideoFromPlaylist,
-    updatePlaylist
+    updatePlaylist,
+    deletePlaylist,
+    getPlaylistById,
+    getUserPlaylist
 }
